@@ -1,13 +1,88 @@
+
 [data-rpg-theme="classic"] {
-  --rpg-bg: #101f36;
-  --rpg-fg: #edf5ff;
-  --rpg-border: #4a91dc;
-  --rpg-accent: #9aceff;
+  --rpg-bg: #102139;
+  --rpg-fg: #e9f5ff;
+  --rpg-border: #48b9ff;
+  --rpg-accent: #78d5ff;
   --rpg-gold: #f5d477;
   --rpg-silver: #d7e0ee;
   --rpg-copper: #edb391;
 }
 
+/* Overgeared-style system notifications */
+[data-rpg-theme="classic"]
+.rpg-window[data-rpg-kind="system"] {
+  background: linear-gradient(
+    145deg,
+    #152c49,
+    #0c182b
+  );
+
+  color: #e9f5ff;
+  border-left: 4px solid #48b9ff;
+  border-right: 2px solid #48b9ff;
+  border-top: 0;
+  border-bottom: 0;
+
+  border-radius: 0;
+  box-shadow: none;
+
+  padding: 0.35em 0.85em;
+  margin: 0;
+
+  line-height: 1.55;
+  font-size: 0.95em;
+}
+
+/* First notification */
+[data-rpg-theme="classic"]
+.rpg-window[data-rpg-kind="system"]
+[data-rpg-group="start"] {
+  border-top: 2px solid #48b9ff;
+  border-radius: 10px 10px 0 0;
+}
+
+/* Single notification */
+[data-rpg-theme="classic"]
+.rpg-window[data-rpg-kind="system"]
+[data-rpg-group="single"] {
+  border-top: 2px solid #48b9ff;
+  border-bottom: 2px solid #48b9ff;
+  border-radius: 10px;
+}
+
+/* Last notification */
+[data-rpg-theme="classic"]
+.rpg-window[data-rpg-kind="system"]
+[data-rpg-group="end"] {
+  border-bottom: 2px solid #48b9ff;
+  border-radius: 0 0 10px 10px;
+}
+
+/* Grouping rules for actual paragraph elements */
+[data-rpg-theme="classic"]
+.rpg-window[data-rpg-kind="system"][data-rpg-group="start"] {
+  border-top: 2px solid #48b9ff;
+  border-radius: 10px 10px 0 0;
+}
+
+[data-rpg-theme="classic"]
+.rpg-window[data-rpg-kind="system"][data-rpg-group="middle"] {
+  border-radius: 0;
+}
+
+[data-rpg-theme="classic"]
+.rpg-window[data-rpg-kind="system"][data-rpg-group="end"] {
+  border-bottom: 2px solid #48b9ff;
+  border-radius: 0 0 10px 10px;
+}
+
+[data-rpg-theme="classic"]
+.rpg-window[data-rpg-kind="system"][data-rpg-group="single"] {
+  border-top: 2px solid #48b9ff;
+  border-bottom: 2px solid #48b9ff;
+  border-radius: 10px;
+}
 [data-rpg-theme="medieval"] {
   --rpg-bg: #2c211b;
   --rpg-fg: #f5eadb;

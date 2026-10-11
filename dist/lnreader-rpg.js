@@ -1,4 +1,4 @@
-/* LNReader RPG Formatter v0.2.0 | MIT
+/* LNReader RPG Formatter v0.2.1 | MIT
    Optional configuration, BEFORE this bundle:
    window.LNReaderRPGConfig = { theme: "classic", onlineRates: false };
    Manual rates: exchangeRates: { KRW: { value: YOUR_RATE, date: "YYYY-MM-DD" } }
@@ -129,12 +129,6 @@
       if (rate === null || validRate(rate)) config.exchangeRates[code] = rate && { ...rate };
     }
     return config;
-  }
-
-  // src/detectors/status.ts
-  var statusLine = /^(?:strength|agility|intelligence|dexterity|stamina|hp|mp|level|experience|attack|defense)\s*:\s*[+\-]?\d[\d, ./%+\-]*(?:\s*\([^\n]{1,50}\))?\s*$/i;
-  function detectStatus(lines) {
-    return lines.length > 0 && lines.every((line) => statusLine.test(line));
   }
 
   // src/detectors/item-rarity.ts
@@ -269,21 +263,58 @@
     return lines.length > 0 && lines.every((line) => skillNotice.test(line) || skillField.test(line));
   }
 
+  // src/detectors/status.ts
+  var statusLine = /^(?:strength|agility|intelligence|dexterity|stamina|hp|mp|level|experience|attack|defense)\s*:\s*[+\-]?\d[\d, ./%+\-]*(?:\s*\([^\n]{1,50}\))?\s*$/i;
+  function detectStatus(lines) {
+    return lines.length > 0 && lines.every((line) => statusLine.test(line));
+  }
+
   // src/detectors/system.ts
   var notification = /^(?:you (?:have )?(?:leveled up|gained \d|received |obtained |lost \d)|your (?:strength|agility|intelligence|dexterity|stamina|hp|mp|level|experience|attack|defense) (?:has |have )?(?:increased|decreased)|achievement unlocked|level up)\b[^\n]{0,180}$/i;
+  function isSystemNotification(text) {
+    const raw = text.trim();
+    if (raw.length < 3 || raw.length > 2e3 || !raw.startsWith("[") || !raw.endsWith("]")) {
+      return false;
+    }
+    const content = raw.slice(1, -1).trim();
+    if (!content) return false;
+    if (content.includes("[") || content.includes("]")) {
+      return false;
+    }
+    return true;
+  }
   function detectWindow(text, previous = null, profile2 = DEFAULT_RARITY_PROFILE) {
     const raw = text.trim();
     if (!raw || raw.length > 2e3) return null;
-    const bracketed = raw.startsWith("[") && raw.endsWith("]");
-    const lines = raw.replace(/^\[|\]$/g, "").split(/\n+/).map((line) => line.trim().replace(/^\[|\]$/g, "").trim()).filter(Boolean);
-    if (previous === "item" && lines.every((line) => itemContinuation.test(line))) return "item";
-    if (previous === "skill" && lines.every((line) => rarityField(line, profile2))) return "skill";
+    const bracketed = isSystemNotification(raw);
+    const lines = raw.replace(/^\[|\]$/g, "").split(/\n+/).map(
+      (line) => line.trim().replace(/^\[|\]$/g, "").trim()
+    ).filter(Boolean);
+    if (previous === "item" && lines.every((line) => itemContinuation.test(line))) {
+      return "item";
+    }
+    if (previous === "skill" && lines.every((line) => rarityField(line, profile2))) {
+      return "skill";
+    }
     if (detectStatus(lines)) return "status";
     if (detectQuest(lines)) return "quest";
     if (detectSkill(lines)) return "skill";
     if (detectItem(lines, profile2)) return "item";
-    if (bracketed && lines.every((line) => notification.test(line))) return "system";
+    if (bracketed && lines.every((line) => notification.test(line))) {
+      return "system";
+    }
+    if (bracketed) return "system";
     return null;
+  }
+
+  // src/core/dom-structure.ts
+  var BLOCKS = "p,div,li,blockquote,pre,td,th,section,article,h1,h2,h3,h4,h5,h6";
+  var EXCLUDED = 'script,style,noscript,textarea,input,select,button,a,code,svg,math,[contenteditable]:not([contenteditable="false"]),[data-rpg-ignore]';
+  function neighbor(element, direction) {
+    var _a;
+    let node = element[direction];
+    while (node && (node.nodeType === 8 || node.nodeType === 3 && !((_a = node.textContent) == null ? void 0 : _a.trim()))) node = node[direction];
+    return (node == null ? void 0 : node.nodeType) === 1 ? node : null;
   }
 
   // src/core/text-ranges.ts
@@ -344,16 +375,6 @@
       wrappers.push(span);
     }
     return wrappers;
-  }
-
-  // src/core/dom-structure.ts
-  var BLOCKS = "p,div,li,blockquote,pre,td,th,section,article,h1,h2,h3,h4,h5,h6";
-  var EXCLUDED = 'script,style,noscript,textarea,input,select,button,a,code,svg,math,[contenteditable]:not([contenteditable="false"]),[data-rpg-ignore]';
-  function neighbor(element, direction) {
-    var _a;
-    let node = element[direction];
-    while (node && (node.nodeType === 8 || node.nodeType === 3 && !((_a = node.textContent) == null ? void 0 : _a.trim()))) node = node[direction];
-    return (node == null ? void 0 : node.nodeType) === 1 ? node : null;
   }
 
   // src/formatters/rarity-formatter.ts
@@ -482,25 +503,56 @@
   function blockText(element) {
     return readText(element).text;
   }
+  function hideBrackets(element) {
+    if (element.hasAttribute("data-rpg-original-text")) return;
+    if (element.children.length > 0) return;
+    const original = element.textContent || "";
+    const trimmed = original.trim();
+    if (!trimmed.startsWith("[") || !trimmed.endsWith("]")) {
+      return;
+    }
+    element.dataset.rpgOriginalText = original;
+    element.textContent = trimmed.slice(1, -1).trim();
+  }
+  function restoreBrackets(element) {
+    if (!element.hasAttribute("data-rpg-original-text")) {
+      return;
+    }
+    element.textContent = element.dataset.rpgOriginalText || "";
+    element.removeAttribute("data-rpg-original-text");
+  }
   function decorateWindows(root, profile2 = DEFAULT_RARITY_PROFILE) {
+    var _a;
     const elements = Array.from(root.querySelectorAll(BLOCKS));
     const kinds = /* @__PURE__ */ new Map();
     const texts = /* @__PURE__ */ new Map();
     for (const element of elements) {
-      if (element.closest(EXCLUDED) || element.querySelector(BLOCKS) || element.querySelector(EXCLUDED)) continue;
+      if (element.closest(EXCLUDED) || element.querySelector(BLOCKS) || element.querySelector(EXCLUDED)) {
+        continue;
+      }
       const previous = neighbor(element, "previousSibling");
-      const text = blockText(element);
+      const text = (_a = element.getAttribute("data-rpg-original-text")) != null ? _a : blockText(element);
       texts.set(element, text);
-      if (previous && isNonItemIdentity(blockText(previous)) && itemLines(text).every((line) => rarityField(line.text, profile2))) continue;
-      const kind = detectWindow(text, previous ? kinds.get(previous) || null : null, profile2);
+      if (previous && isNonItemIdentity(blockText(previous)) && itemLines(text).every((line) => rarityField(line.text, profile2))) {
+        continue;
+      }
+      const kind = detectWindow(
+        text,
+        previous ? kinds.get(previous) || null : null,
+        profile2
+      );
       if (kind) kinds.set(element, kind);
     }
     const joins = (before, after) => {
-      if (!before || !after || !kinds.has(before) || kinds.get(before) !== kinds.get(after)) return false;
+      if (!before || !after || !kinds.has(before) || kinds.get(before) !== kinds.get(after)) {
+        return false;
+      }
       if (kinds.get(before) !== "item") return true;
       const previous = itemLines(texts.get(before));
       const next = itemLines(texts.get(after));
-      if (next.some((line) => rarityHeader(line.text, profile2))) return false;
+      if (next.some((line) => rarityHeader(line.text, profile2))) {
+        return false;
+      }
       if (next.some((line) => itemNameLine(line.text))) {
         return previous.length === 1 && !!rarityHeader(previous[0].text, profile2) && !rarityHeader(previous[0].text, profile2)[2];
       }
@@ -509,9 +561,12 @@
     for (const element of elements) {
       const kind = kinds.get(element);
       if (!kind) {
+        restoreBrackets(element);
         if (element.classList.contains("rpg-window")) {
           element.classList.remove("rpg-window");
-          if (!element.className) element.removeAttribute("class");
+          if (!element.className) {
+            element.removeAttribute("class");
+          }
           element.removeAttribute("data-rpg-kind");
           element.removeAttribute("data-rpg-group");
         }
@@ -524,28 +579,42 @@
       const joinedBefore = joins(before, element);
       const joinedAfter = joins(element, after);
       element.dataset.rpgGroup = joinedBefore ? joinedAfter ? "middle" : "end" : joinedAfter ? "start" : "single";
+      if (kind === "system") {
+        hideBrackets(element);
+      } else {
+        restoreBrackets(element);
+      }
     }
   }
   function clearFormatting(root) {
     clearRarity(root);
     root.querySelectorAll(".rpg-window").forEach((element) => {
+      restoreBrackets(element);
       element.classList.remove("rpg-window");
-      if (!element.className) element.removeAttribute("class");
+      if (!element.className) {
+        element.removeAttribute("class");
+      }
       element.removeAttribute("data-rpg-kind");
       element.removeAttribute("data-rpg-group");
     });
-    root.querySelectorAll(".rpg-money").forEach((element) => element.replaceWith(...Array.from(element.childNodes)));
+    root.querySelectorAll(".rpg-money").forEach(
+      (element) => element.replaceWith(...Array.from(element.childNodes))
+    );
     root.removeAttribute("data-rpg-theme");
     root.removeAttribute("data-rpg-tone");
   }
   function readingAnchor(root) {
     const win = root.ownerDocument.defaultView;
-    if (root.ownerDocument.body.classList.contains("page-reader") || win.scrollY === 0) return () => {
-    };
-    const element = Array.from(root.querySelectorAll("p,li,blockquote")).find((el) => {
-      const box = el.getBoundingClientRect();
-      return box.bottom > 0 && box.top < win.innerHeight;
-    });
+    if (root.ownerDocument.body.classList.contains("page-reader") || win.scrollY === 0) {
+      return () => {
+      };
+    }
+    const element = Array.from(root.querySelectorAll("p,li,blockquote")).find(
+      (el) => {
+        const box = el.getBoundingClientRect();
+        return box.bottom > 0 && box.top < win.innerHeight;
+      }
+    );
     if (!element) return () => {
     };
     const top = element.getBoundingClientRect().top;
@@ -558,8 +627,11 @@
         const priority = style.getPropertyPriority("scroll-behavior");
         style.setProperty("scroll-behavior", "auto", "important");
         win.scrollBy(0, delta);
-        if (old) style.setProperty("scroll-behavior", old, priority);
-        else style.removeProperty("scroll-behavior");
+        if (old) {
+          style.setProperty("scroll-behavior", old, priority);
+        } else {
+          style.removeProperty("scroll-behavior");
+        }
       }
     };
   }
@@ -881,7 +953,7 @@
   };
 
   // src/themes/classic.css?inline
-  var classic_default = '[data-rpg-theme="classic"] {\n  --rpg-bg: #101f36;\n  --rpg-fg: #edf5ff;\n  --rpg-border: #4a91dc;\n  --rpg-accent: #9aceff;\n  --rpg-gold: #f5d477;\n  --rpg-silver: #d7e0ee;\n  --rpg-copper: #edb391;\n}\n';
+  var classic_default = '\n[data-rpg-theme="classic"] {\n  --rpg-bg: #102139;\n  --rpg-fg: #e9f5ff;\n  --rpg-border: #48b9ff;\n  --rpg-accent: #78d5ff;\n  --rpg-gold: #f5d477;\n  --rpg-silver: #d7e0ee;\n  --rpg-copper: #edb391;\n}\n\n/* Overgeared-style system notifications */\n[data-rpg-theme="classic"]\n.rpg-window[data-rpg-kind="system"] {\n  background: linear-gradient(\n    145deg,\n    #152c49,\n    #0c182b\n  );\n\n  color: #e9f5ff;\n  border-left: 4px solid #48b9ff;\n  border-right: 2px solid #48b9ff;\n  border-top: 0;\n  border-bottom: 0;\n\n  border-radius: 0;\n  box-shadow: none;\n\n  padding: 0.35em 0.85em;\n  margin: 0;\n\n  line-height: 1.55;\n  font-size: 0.95em;\n}\n\n/* First notification */\n[data-rpg-theme="classic"]\n.rpg-window[data-rpg-kind="system"]\n[data-rpg-group="start"] {\n  border-top: 2px solid #48b9ff;\n  border-radius: 10px 10px 0 0;\n}\n\n/* Single notification */\n[data-rpg-theme="classic"]\n.rpg-window[data-rpg-kind="system"]\n[data-rpg-group="single"] {\n  border-top: 2px solid #48b9ff;\n  border-bottom: 2px solid #48b9ff;\n  border-radius: 10px;\n}\n\n/* Last notification */\n[data-rpg-theme="classic"]\n.rpg-window[data-rpg-kind="system"]\n[data-rpg-group="end"] {\n  border-bottom: 2px solid #48b9ff;\n  border-radius: 0 0 10px 10px;\n}\n\n/* Grouping rules for actual paragraph elements */\n[data-rpg-theme="classic"]\n.rpg-window[data-rpg-kind="system"][data-rpg-group="start"] {\n  border-top: 2px solid #48b9ff;\n  border-radius: 10px 10px 0 0;\n}\n\n[data-rpg-theme="classic"]\n.rpg-window[data-rpg-kind="system"][data-rpg-group="middle"] {\n  border-radius: 0;\n}\n\n[data-rpg-theme="classic"]\n.rpg-window[data-rpg-kind="system"][data-rpg-group="end"] {\n  border-bottom: 2px solid #48b9ff;\n  border-radius: 0 0 10px 10px;\n}\n\n[data-rpg-theme="classic"]\n.rpg-window[data-rpg-kind="system"][data-rpg-group="single"] {\n  border-top: 2px solid #48b9ff;\n  border-bottom: 2px solid #48b9ff;\n  border-radius: 10px;\n}';
 
   // src/themes/medieval.css?inline
   var medieval_default = '[data-rpg-theme="medieval"] {\n  --rpg-bg: #2c211b;\n  --rpg-fg: #f5eadb;\n  --rpg-border: #b99b59;\n  --rpg-accent: #f1cf91;\n  --rpg-gold: #f4d375;\n  --rpg-silver: #deddda;\n  --rpg-copper: #f0b58b;\n}\n';
