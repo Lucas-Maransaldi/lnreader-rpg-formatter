@@ -1,6 +1,6 @@
 {
   "name": "lnreader-rpg-formatter",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Offline-first LitRPG formatting for LNReader Custom JavaScript",
   "type": "module",
   "license": "MIT",

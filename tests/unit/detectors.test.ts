@@ -37,7 +37,7 @@ describe('conservative system detection', () => {
     '[You have leveled up!]\nThen the rain began.',
     '',
   ])('leaves narration unchanged: %s', (text) =>
-    expect(detectWindow(text)).toBe('system'),
+    expect(detectWindow(text)).toBeNull(),
   );
 });
 
