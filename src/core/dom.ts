@@ -10,13 +10,12 @@ import {
   rarityHeader,
 } from '../detectors/item-rarity';
 
-import {
-  isItemDescription,
-  isItemRequirement,
-  isUnlabeledItemName,
-} from '../detectors/items';
+import { isItemDescription, isItemRequirement } from '../detectors/items';
+
 import { clearRarity } from '../formatters/rarity-formatter';
+
 import { BLOCKS, EXCLUDED, neighbor } from './dom-structure';
+
 import { readText } from './text-ranges';
 
 export function blockText(element: Element): string {
@@ -24,8 +23,10 @@ export function blockText(element: Element): string {
 }
 
 /**
- * Remove only the outer brackets from plain-text notifications.
- * Keep the original content so clearFormatting() can restore it.
+ * Hide the outer brackets of plain-text SYSTEM notifications.
+ *
+ * Brackets remain in textContent so the original content
+ * can be restored without losing information.
  */
 function hideBrackets(element: HTMLElement): void {
   if (element.hasAttribute('data-rpg-brackets-hidden')) {
@@ -84,80 +85,182 @@ function restoreBrackets(element: HTMLElement): void {
 
   element.removeAttribute('data-rpg-brackets-hidden');
 }
+
 /**
- * Extends an identified item through its descriptive
- * paragraphs and explicit requirement fields.
+ * Checks whether a bracketed paragraph is a plausible
+ * standalone item title.
  *
- * Does not modify the DOM.
+ * This function does not classify the paragraph alone.
+ * A valid rarity field must immediately follow it.
  */
-function extendItemDescriptions(
+function isItemTitleCandidate(text: string): boolean {
+  const raw = text.trim();
+
+  if (
+    raw.length < 3 ||
+    raw.length > 180 ||
+    !raw.startsWith('[') ||
+    !raw.endsWith(']')
+  ) {
+    return false;
+  }
+
+  const title = raw.slice(1, -1).trim();
+
+  if (
+    !title ||
+    title.includes('\n') ||
+    title.includes('[') ||
+    title.includes(']')
+  ) {
+    return false;
+  }
+
+  // Reject common SYSTEM notification openings.
+  if (
+    /^(?:you|your|the|a|an|in order|at present|cannot|can't|unable|congratulations)\b/i.test(
+      title,
+    )
+  ) {
+    return false;
+  }
+
+  // Reject acquisition, progression and status messages.
+  if (
+    /\b(?:has been acquired|have acquired|was acquired|obtained|received|learned|level(?:ed)? up|is sealed|has increased|have increased)\b/i.test(
+      title,
+    )
+  ) {
+    return false;
+  }
+
+  // A standalone item title should not be a full sentence.
+  if (/[.!?]$/.test(title)) {
+    return false;
+  }
+
+  return true;
+}
+
+/**
+ * Returns true only when the paragraph contains one
+ * explicit rarity field, such as "Rating: Legendary".
+ */
+function isExplicitRating(text: string, profile: RarityProfile): boolean {
+  const lines = itemLines(text);
+
+  return lines.length === 1 && !!rarityField(lines[0].text, profile);
+}
+
+/**
+ * Identifies complete item blocks from adjacent paragraphs.
+ *
+ * Example:
+ *
+ * [Swordsmanship Textbook: 200,000 Army Swordsmanship]
+ * Rating: Legendary
+ * A textbook recording the basics...
+ * Only one swordsmanship technique...
+ * Learning Conditions: ...
+ *
+ * This phase only classifies elements.
+ * It does not change the DOM.
+ */
+function associateItemBlocks(
   elements: HTMLElement[],
   kinds: Map<Element, WindowKind>,
   texts: Map<Element, string>,
   profile: RarityProfile,
+  itemContinuations: Set<Element>,
 ): void {
   for (let index = 0; index < elements.length - 1; index++) {
-    const element = elements[index];
-
-    if (kinds.get(element) !== 'item') continue;
-
-    const name = texts.get(element);
-
-    if (!name || !isUnlabeledItemName(name)) continue;
-
+    const titleElement = elements[index];
     const ratingElement = elements[index + 1];
 
-    // The rating must be the actual next DOM sibling.
-    if (neighbor(element, 'nextSibling') !== ratingElement) {
+    // Both paragraphs must be actual DOM siblings.
+    if (neighbor(titleElement, 'nextSibling') !== ratingElement) {
       continue;
     }
 
+    const titleText = texts.get(titleElement);
     const ratingText = texts.get(ratingElement);
 
-    if (!ratingText) continue;
-
-    const ratingLines = itemLines(ratingText);
-
-    if (
-      ratingLines.length !== 1 ||
-      !rarityField(ratingLines[0].text, profile)
-    ) {
+    if (!titleText || !ratingText) {
       continue;
     }
 
-    // We have an item name followed by an explicit rating.
+    if (!isItemTitleCandidate(titleText)) {
+      continue;
+    }
+
+    if (!isExplicitRating(ratingText, profile)) {
+      continue;
+    }
+
+    // Confirmed item title followed by an explicit rating.
+    kinds.set(titleElement, 'item');
+    kinds.set(ratingElement, 'item');
+
+    itemContinuations.add(ratingElement);
+
     let previous: Element = ratingElement;
     let descriptions = 0;
 
     for (let nextIndex = index + 2; nextIndex < elements.length; nextIndex++) {
-      const next = elements[nextIndex];
+      const current = elements[nextIndex];
 
-      if (neighbor(previous, 'nextSibling') !== next) break;
-
-      // Never overwrite another recognized window.
-      if (kinds.has(next)) break;
-
-      const text = texts.get(next);
-
-      if (!text) break;
-
-      if (isItemRequirement(text)) {
-        kinds.set(next, 'item');
+      // Stop at any structural interruption.
+      if (neighbor(previous, 'nextSibling') !== current) {
         break;
       }
 
-      if (!isItemDescription(text)) break;
+      // Never overwrite an independently detected window.
+      if (kinds.has(current)) {
+        break;
+      }
 
-      // Limit unmarked descriptive paragraphs.
-      if (descriptions >= 3) break;
+      const text = texts.get(current);
 
-      kinds.set(next, 'item');
+      if (!text) {
+        break;
+      }
+
+      // Explicit requirements end this item block.
+      if (isItemRequirement(text)) {
+        kinds.set(current, 'item');
+        itemContinuations.add(current);
+        break;
+      }
+
+      // Stop at dialogue, SYSTEM notifications or narrative.
+      if (!isItemDescription(text)) {
+        break;
+      }
+
+      // Limit unmarked description paragraphs.
+      if (descriptions >= 3) {
+        break;
+      }
+
+      kinds.set(current, 'item');
+      itemContinuations.add(current);
 
       descriptions++;
-      previous = next;
+      previous = current;
     }
   }
 }
+
+/**
+ * Classifies RPG windows and associates related paragraphs.
+ *
+ * Processing phases:
+ *
+ * 1. Independent classification
+ * 2. Contextual item association
+ * 3. Group boundary calculation
+ * 4. DOM decoration
+ */
 export function decorateWindows(
   root: HTMLElement,
   profile: RarityProfile = DEFAULT_RARITY_PROFILE,
@@ -166,6 +269,12 @@ export function decorateWindows(
 
   const kinds = new Map<Element, WindowKind>();
   const texts = new Map<Element, string>();
+
+  const itemContinuations = new Set<Element>();
+
+  // =========================================
+  // PHASE 1 — CLASSIFICATION
+  // =========================================
 
   for (const element of elements) {
     if (
@@ -178,7 +287,6 @@ export function decorateWindows(
 
     const previous = neighbor(element, 'previousSibling');
 
-    // Use the original text when a window was already decorated.
     const text =
       element.getAttribute('data-rpg-original-text') ?? blockText(element);
 
@@ -192,31 +300,26 @@ export function decorateWindows(
       continue;
     }
 
-    let kind = detectWindow(
+    const kind = detectWindow(
       text,
       previous ? kinds.get(previous) || null : null,
       profile,
     );
 
-    // An unlabeled item name followed by a rarity field
-    // belongs to the item, not to the system notification group.
-    const next = neighbor(element, 'nextSibling');
-
-    if (next && isUnlabeledItemName(text)) {
-      const nextText =
-        next.getAttribute('data-rpg-original-text') ?? blockText(next);
-
-      const nextLines = itemLines(nextText);
-
-      if (nextLines.length === 1 && rarityField(nextLines[0].text, profile)) {
-        kind = 'item';
-      }
+    if (kind) {
+      kinds.set(element, kind);
     }
-
-    if (kind) kinds.set(element, kind);
   }
 
-  extendItemDescriptions(elements, kinds, texts, profile);
+  // =========================================
+  // PHASE 2 — ITEM ASSOCIATION
+  // =========================================
+
+  associateItemBlocks(elements, kinds, texts, profile, itemContinuations);
+
+  // =========================================
+  // PHASE 3 — GROUP BOUNDARIES
+  // =========================================
 
   const joins = (before: Element | null, after: Element | null): boolean => {
     if (
@@ -228,33 +331,28 @@ export function decorateWindows(
       return false;
     }
 
-    if (kinds.get(before) !== 'item') return true;
+    const kind = kinds.get(before);
+
+    // Consecutive SYSTEM notifications share a window.
+    if (kind !== 'item') {
+      return true;
+    }
+
+    // Continuations explicitly associated in phase 2
+    // always belong to the same item.
+    if (itemContinuations.has(after)) {
+      return true;
+    }
 
     const previous = itemLines(texts.get(before)!);
     const next = itemLines(texts.get(after)!);
 
-    // Free-text descriptions and requirement fields that were
-    // explicitly classified as item continuations stay grouped.
-    if (
-      isItemDescription(texts.get(after)!) ||
-      isItemRequirement(texts.get(after)!)
-    ) {
-      return true;
-    }
-
+    // A new rarity header starts a separate item.
     if (next.some((line) => rarityHeader(line.text, profile))) {
       return false;
     }
 
-    // Unlabeled item name followed by its explicit rarity.
-    if (
-      isUnlabeledItemName(texts.get(before)!) &&
-      next.length === 1 &&
-      rarityField(next[0].text, profile)
-    ) {
-      return true;
-    }
-
+    // Preserve existing labeled item-name grouping.
     if (next.some((line) => itemNameLine(line.text))) {
       return (
         previous.length === 1 &&
@@ -265,6 +363,10 @@ export function decorateWindows(
 
     return true;
   };
+
+  // =========================================
+  // PHASE 4 — DOM DECORATION
+  // =========================================
 
   for (const element of elements) {
     const kind = kinds.get(element);
@@ -287,12 +389,15 @@ export function decorateWindows(
     }
 
     element.classList.add('rpg-window');
+
     element.dataset.rpgKind = kind;
 
     const before = neighbor(element, 'previousSibling');
+
     const after = neighbor(element, 'nextSibling');
 
     const joinedBefore = joins(before, element);
+
     const joinedAfter = joins(element, after);
 
     element.dataset.rpgGroup = joinedBefore
@@ -303,7 +408,6 @@ export function decorateWindows(
         ? 'start'
         : 'single';
 
-    // Only strip brackets for recognized system notifications.
     if (kind === 'system') {
       hideBrackets(element);
     } else {
@@ -312,6 +416,9 @@ export function decorateWindows(
   }
 }
 
+/**
+ * Restores original text and removes RPG decorations.
+ */
 export function clearFormatting(root: HTMLElement): void {
   clearRarity(root);
 
@@ -338,6 +445,10 @@ export function clearFormatting(root: HTMLElement): void {
   root.removeAttribute('data-rpg-tone');
 }
 
+/**
+ * Preserves the reader's scroll position when formatting
+ * changes paragraph dimensions.
+ */
 export function readingAnchor(root: HTMLElement): () => void {
   const win = root.ownerDocument.defaultView!;
 
@@ -356,12 +467,16 @@ export function readingAnchor(root: HTMLElement): () => void {
     },
   );
 
-  if (!element) return () => {};
+  if (!element) {
+    return () => {};
+  }
 
   const top = element.getBoundingClientRect().top;
 
   return () => {
-    if (!element.isConnected) return;
+    if (!element.isConnected) {
+      return;
+    }
 
     const delta = element.getBoundingClientRect().top - top;
 

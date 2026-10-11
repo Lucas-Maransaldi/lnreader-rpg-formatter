@@ -720,32 +720,6 @@
     );
   }
   var itemContinuation = /^(?:effects?|requirements?|weight|attack(?: power| speed)?|defense|durability|price|value)\s*:\s*\S.{0,180}$/i;
-  function isUnlabeledItemName(text) {
-    const raw = text.trim();
-    if (!raw.startsWith("[") || !raw.endsWith("]")) {
-      return false;
-    }
-    const content = raw.slice(1, -1).trim();
-    if (!content || content.length > 160) {
-      return false;
-    }
-    if (content.includes("\n")) {
-      return false;
-    }
-    if (/^(?:you|your|the|a|an|in order|at present|cannot|can't|unable|congratulations)\b/i.test(
-      content
-    )) {
-      return false;
-    }
-    if (/\b(?:has been acquired|have acquired|obtained|received|learned|level(?:ed)? up|is sealed|was acquired)\b/i.test(
-      content
-    )) {
-      return false;
-    }
-    return /\b(?:sword|textbook|armor|helmet|shield|ring|necklace|staff|bow|dagger|blade|boots|gloves|potion|scroll|book|weapon|accessory)\b/i.test(
-      content
-    );
-  }
   function isItemRequirement(text) {
     return /^(?:learning conditions?|usage conditions?|equip(?:ment)? requirements?|requirements?|conditions to (?:use|equip|learn))\s*:\s*\S/i.test(
       text.trim()
@@ -861,47 +835,93 @@
     element.replaceChildren(document.createTextNode(text));
     element.removeAttribute("data-rpg-brackets-hidden");
   }
-  function extendItemDescriptions(elements, kinds, texts, profile2) {
+  function isItemTitleCandidate(text) {
+    const raw = text.trim();
+    if (raw.length < 3 || raw.length > 180 || !raw.startsWith("[") || !raw.endsWith("]")) {
+      return false;
+    }
+    const title = raw.slice(1, -1).trim();
+    if (!title || title.includes("\n") || title.includes("[") || title.includes("]")) {
+      return false;
+    }
+    if (/^(?:you|your|the|a|an|in order|at present|cannot|can't|unable|congratulations)\b/i.test(
+      title
+    )) {
+      return false;
+    }
+    if (/\b(?:has been acquired|have acquired|was acquired|obtained|received|learned|level(?:ed)? up|is sealed|has increased|have increased)\b/i.test(
+      title
+    )) {
+      return false;
+    }
+    if (/[.!?]$/.test(title)) {
+      return false;
+    }
+    return true;
+  }
+  function isExplicitRating(text, profile2) {
+    const lines = itemLines(text);
+    return lines.length === 1 && !!rarityField(lines[0].text, profile2);
+  }
+  function associateItemBlocks(elements, kinds, texts, profile2, itemContinuations) {
     for (let index = 0; index < elements.length - 1; index++) {
-      const element = elements[index];
-      if (kinds.get(element) !== "item") continue;
-      const name = texts.get(element);
-      if (!name || !isUnlabeledItemName(name)) continue;
+      const titleElement = elements[index];
       const ratingElement = elements[index + 1];
-      if (neighbor(element, "nextSibling") !== ratingElement) {
+      if (neighbor(titleElement, "nextSibling") !== ratingElement) {
         continue;
       }
+      const titleText = texts.get(titleElement);
       const ratingText = texts.get(ratingElement);
-      if (!ratingText) continue;
-      const ratingLines = itemLines(ratingText);
-      if (ratingLines.length !== 1 || !rarityField(ratingLines[0].text, profile2)) {
+      if (!titleText || !ratingText) {
         continue;
       }
+      if (!isItemTitleCandidate(titleText)) {
+        continue;
+      }
+      if (!isExplicitRating(ratingText, profile2)) {
+        continue;
+      }
+      kinds.set(titleElement, "item");
+      kinds.set(ratingElement, "item");
+      itemContinuations.add(ratingElement);
       let previous = ratingElement;
       let descriptions = 0;
       for (let nextIndex = index + 2; nextIndex < elements.length; nextIndex++) {
-        const next = elements[nextIndex];
-        if (neighbor(previous, "nextSibling") !== next) break;
-        if (kinds.has(next)) break;
-        const text = texts.get(next);
-        if (!text) break;
-        if (isItemRequirement(text)) {
-          kinds.set(next, "item");
+        const current = elements[nextIndex];
+        if (neighbor(previous, "nextSibling") !== current) {
           break;
         }
-        if (!isItemDescription(text)) break;
-        if (descriptions >= 3) break;
-        kinds.set(next, "item");
+        if (kinds.has(current)) {
+          break;
+        }
+        const text = texts.get(current);
+        if (!text) {
+          break;
+        }
+        if (isItemRequirement(text)) {
+          kinds.set(current, "item");
+          itemContinuations.add(current);
+          break;
+        }
+        if (!isItemDescription(text)) {
+          break;
+        }
+        if (descriptions >= 3) {
+          break;
+        }
+        kinds.set(current, "item");
+        itemContinuations.add(current);
         descriptions++;
-        previous = next;
+        previous = current;
       }
     }
   }
   function decorateWindows(root, profile2 = DEFAULT_RARITY_PROFILE) {
-    var _a, _b;
+    var _a;
     const elements = Array.from(root.querySelectorAll(BLOCKS));
     const kinds = /* @__PURE__ */ new Map();
     const texts = /* @__PURE__ */ new Map();
+    const itemContinuations = /* @__PURE__ */ new Set();
     for (const element of elements) {
       if (element.closest(EXCLUDED) || element.querySelector(BLOCKS) || element.querySelector(EXCLUDED)) {
         continue;
@@ -912,37 +932,31 @@
       if (previous && isNonItemIdentity(blockText(previous)) && itemLines(text).every((line) => rarityField(line.text, profile2))) {
         continue;
       }
-      let kind = detectWindow(
+      const kind = detectWindow(
         text,
         previous ? kinds.get(previous) || null : null,
         profile2
       );
-      const next = neighbor(element, "nextSibling");
-      if (next && isUnlabeledItemName(text)) {
-        const nextText = (_b = next.getAttribute("data-rpg-original-text")) != null ? _b : blockText(next);
-        const nextLines = itemLines(nextText);
-        if (nextLines.length === 1 && rarityField(nextLines[0].text, profile2)) {
-          kind = "item";
-        }
+      if (kind) {
+        kinds.set(element, kind);
       }
-      if (kind) kinds.set(element, kind);
     }
-    extendItemDescriptions(elements, kinds, texts, profile2);
+    associateItemBlocks(elements, kinds, texts, profile2, itemContinuations);
     const joins = (before, after) => {
       if (!before || !after || !kinds.has(before) || kinds.get(before) !== kinds.get(after)) {
         return false;
       }
-      if (kinds.get(before) !== "item") return true;
+      const kind = kinds.get(before);
+      if (kind !== "item") {
+        return true;
+      }
+      if (itemContinuations.has(after)) {
+        return true;
+      }
       const previous = itemLines(texts.get(before));
       const next = itemLines(texts.get(after));
-      if (isItemDescription(texts.get(after)) || isItemRequirement(texts.get(after))) {
-        return true;
-      }
       if (next.some((line) => rarityHeader(line.text, profile2))) {
         return false;
-      }
-      if (isUnlabeledItemName(texts.get(before)) && next.length === 1 && rarityField(next[0].text, profile2)) {
-        return true;
       }
       if (next.some((line) => itemNameLine(line.text))) {
         return previous.length === 1 && !!rarityHeader(previous[0].text, profile2) && !rarityHeader(previous[0].text, profile2)[2];
@@ -1006,11 +1020,15 @@
         return box.bottom > 0 && box.top < win.innerHeight;
       }
     );
-    if (!element) return () => {
-    };
+    if (!element) {
+      return () => {
+      };
+    }
     const top = element.getBoundingClientRect().top;
     return () => {
-      if (!element.isConnected) return;
+      if (!element.isConnected) {
+        return;
+      }
       const delta = element.getBoundingClientRect().top - top;
       if (Math.abs(delta) > 0.5) {
         const style = root.ownerDocument.documentElement.style;
