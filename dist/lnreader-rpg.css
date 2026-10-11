@@ -1,77 +1,168 @@
+/* =========================================
+   LNReader RPG Formatter — Classic Theme
+   ========================================= */
+
 [data-rpg-theme="classic"] {
   --rpg-bg: #102139;
   --rpg-fg: #e9f5ff;
   --rpg-border: #48b9ff;
   --rpg-accent: #78d5ff;
+
   --rpg-gold: #f5d477;
   --rpg-silver: #d7e0ee;
   --rpg-copper: #edb391;
 }
 
+/* =========================================
+   SYSTEM WINDOW
+   ========================================= */
+
 [data-rpg-theme="classic"]
 .rpg-window[data-rpg-kind="system"] {
-  background: linear-gradient(
-    145deg,
-    #152c49,
-    #0c182b
-  );
+  box-sizing: border-box;
 
-  color: #e9f5ff;
+  color: var(--rpg-fg);
+
+  background: #102139;
 
   border: 0;
+
   border-radius: 0;
 
-  padding: 0;
   font-size: inherit;
   line-height: inherit;
 
+  text-indent: 0;
+
+  padding: 0.45em 0.85em;
+
   box-shadow:
-    inset 3px 0 0 #48b9ff,
-    inset -2px 0 0 #48b9ff;
+    inset 3px 0 0 var(--rpg-border),
+    inset -2px 0 0 var(--rpg-border);
 }
+
+/* =========================================
+   FIRST NOTIFICATION
+   ========================================= */
 
 [data-rpg-theme="classic"]
 .rpg-window[data-rpg-kind="system"][data-rpg-group="start"] {
-  border-radius: 10px 10px 0 0;
+  border-radius: 12px 12px 0 0;
+
+  padding-top: 0.85em;
 
   box-shadow:
-    inset 3px 0 0 #48b9ff,
-    inset -2px 0 0 #48b9ff,
-    inset 0 2px 0 #48b9ff;
+    inset 3px 0 0 var(--rpg-border),
+    inset -2px 0 0 var(--rpg-border),
+    inset 0 2px 0 var(--rpg-border);
 }
+
+/* =========================================
+   MIDDLE NOTIFICATIONS
+   ========================================= */
 
 [data-rpg-theme="classic"]
 .rpg-window[data-rpg-kind="system"][data-rpg-group="middle"] {
   border-radius: 0;
+
+  box-shadow:
+    inset 3px 0 0 var(--rpg-border),
+    inset -2px 0 0 var(--rpg-border);
 }
+
+/* =========================================
+   LAST NOTIFICATION
+   ========================================= */
 
 [data-rpg-theme="classic"]
 .rpg-window[data-rpg-kind="system"][data-rpg-group="end"] {
-  border-radius: 0 0 10px 10px;
+  border-radius: 0 0 12px 12px;
+
+  padding-bottom: 0.85em;
 
   box-shadow:
-    inset 3px 0 0 #48b9ff,
-    inset -2px 0 0 #48b9ff,
-    inset 0 -2px 0 #48b9ff;
+    inset 3px 0 0 var(--rpg-border),
+    inset -2px 0 0 var(--rpg-border),
+    inset 0 -2px 0 var(--rpg-border);
 }
+
+/* =========================================
+   SINGLE NOTIFICATION
+   ========================================= */
 
 [data-rpg-theme="classic"]
 .rpg-window[data-rpg-kind="system"][data-rpg-group="single"] {
-  border-radius: 10px;
+  border-radius: 12px;
+
+  padding-top: 0.85em;
+  padding-bottom: 0.85em;
 
   box-shadow:
-    inset 3px 0 0 #48b9ff,
-    inset -2px 0 0 #48b9ff,
-    inset 0 2px 0 #48b9ff,
-    inset 0 -2px 0 #48b9ff;
+    inset 3px 0 0 var(--rpg-border),
+    inset -2px 0 0 var(--rpg-border),
+    inset 0 2px 0 var(--rpg-border),
+    inset 0 -2px 0 var(--rpg-border);
 }
-/* Recuo visual sem alterar a altura do parágrafo */
-[data-rpg-theme="classic"] .rpg-window[data-rpg-kind="system"] {
-  padding: 0 !important;
-  border: 0 !important;
-  box-sizing: border-box;
 
-  text-indent: 0.65em;
+/* =========================================
+   SYSTEM HEADER
+   ========================================= */
+
+/*
+ * The header is decorative.
+ * It does not change the novel's textContent.
+ */
+
+body:not(.page-reader)
+[data-rpg-theme="classic"]
+.rpg-window[data-rpg-kind="system"][data-rpg-group="start"]::before,
+
+body:not(.page-reader)
+[data-rpg-theme="classic"]
+.rpg-window[data-rpg-kind="system"][data-rpg-group="single"]::before {
+  content: "✦  SYSTEM";
+
+  display: block;
+
+  color: var(--rpg-accent);
+
+  font-family: system-ui, sans-serif;
+  font-size: 0.72em;
+  font-weight: 800;
+
+  letter-spacing: 0.16em;
+
+  padding-bottom: 0.75em;
+  margin-bottom: 0.75em;
+
+  border-bottom: 1px solid rgba(120, 213, 255, 0.22);
+}
+
+/* =========================================
+   COLUMN MODE
+   ========================================= */
+
+/*
+ * Keep paragraph box geometry unchanged
+ * when the host uses horizontal pagination.
+ */
+
+body.page-reader
+[data-rpg-theme="classic"]
+.rpg-window[data-rpg-kind="system"] {
+  padding: 0;
+  margin-left: inherit;
+  margin-right: inherit;
+}
+
+/*
+ * In column mode, the header is omitted
+ * because it would increase paragraph height.
+ */
+body.page-reader
+[data-rpg-theme="classic"]
+.rpg-window[data-rpg-kind="system"]::before {
+  content: none;
 }
 [data-rpg-theme="medieval"] {
   --rpg-bg: #2c211b;
@@ -156,8 +247,11 @@ body:not(.page-reader) [data-rpg-theme] .rpg-window[data-rpg-group="end"], body:
 .rpg-popup p { margin: 14px 0 0; padding: 0; }
 .rpg-popup small { display: block; font-size: 12px; opacity: .8; }
 .rpg-popup-close { position: absolute; top: 6px; right: 6px; min-width: 44px; min-height: 44px; border: 0; background: transparent; color: inherit; font-size: 26px; cursor: pointer; }
-/* Avoid repagination from box padding in the host's horizontal column mode. */
-.page-reader [data-rpg-theme] .rpg-window { padding: 0; }
+/* Preserve paragraph geometry in horizontal column mode. */
+.page-reader [data-rpg-theme] .rpg-window {
+  padding: 0;
+  border-width: 0;
+}
 .rpg-window .rpg-bracket {
   font-size: 0;
   line-height: 0;

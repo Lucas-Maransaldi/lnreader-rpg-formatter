@@ -53,8 +53,11 @@ body:not(.page-reader) [data-rpg-theme] .rpg-window[data-rpg-group="end"], body:
 .rpg-popup p { margin: 14px 0 0; padding: 0; }
 .rpg-popup small { display: block; font-size: 12px; opacity: .8; }
 .rpg-popup-close { position: absolute; top: 6px; right: 6px; min-width: 44px; min-height: 44px; border: 0; background: transparent; color: inherit; font-size: 26px; cursor: pointer; }
-/* Avoid repagination from box padding in the host's horizontal column mode. */
-.page-reader [data-rpg-theme] .rpg-window { padding: 0; }
+/* Preserve paragraph geometry in horizontal column mode. */
+.page-reader [data-rpg-theme] .rpg-window {
+  padding: 0;
+  border-width: 0;
+}
 .rpg-window .rpg-bracket {
   font-size: 0;
   line-height: 0;
