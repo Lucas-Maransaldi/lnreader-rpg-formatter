@@ -2,6 +2,7 @@ import {
   DEFAULT_RARITY_PROFILE,
   type RarityProfile,
 } from '../core/rarity-config';
+
 import { rarityField } from './item-rarity';
 import { detectItem, itemContinuation } from './items';
 import { detectQuest } from './quests';
@@ -10,17 +11,15 @@ import { detectStatus } from './status';
 
 export type WindowKind = 'system' | 'status' | 'item' | 'quest' | 'skill';
 
-const notification =
-  /^(?:you (?:have )?(?:leveled up|gained \d|received |obtained |lost \d)|your (?:strength|agility|intelligence|dexterity|stamina|hp|mp|level|experience|attack|defense) (?:has |have )?(?:increased|decreased)|achievement unlocked|level up)\b[^\n]{0,180}$/i;
-
 /**
- * Recognizes standalone bracketed system notifications.
+ * Identifies a standalone bracketed notification.
  *
- * Overgeared frequently uses complete paragraphs such as:
- * [You have left the event map!]
+ * Examples:
+ * [You have leveled up!]
  * [The quest has failed!]
+ * [The appreciation of the old sheath has greatly reduced.]
  *
- * A paragraph must consist entirely of the notification.
+ * Detection is structural, not dependent on specific words.
  */
 export function isSystemNotification(text: string): boolean {
   const raw = text.trim();
@@ -68,6 +67,7 @@ export function detectWindow(
     )
     .filter(Boolean);
 
+  // Preserve item continuation behavior.
   if (
     previous === 'item' &&
     lines.every((line) => itemContinuation.test(line))
@@ -75,6 +75,7 @@ export function detectWindow(
     return 'item';
   }
 
+  // Preserve skill continuation behavior.
   if (
     previous === 'skill' &&
     lines.every((line) => rarityField(line, profile))
@@ -82,32 +83,18 @@ export function detectWindow(
     return 'skill';
   }
 
+  // Specialized detectors take priority.
   if (detectStatus(lines)) return 'status';
+
   if (detectQuest(lines)) return 'quest';
+
   if (detectSkill(lines)) return 'skill';
+
   if (detectItem(lines, profile)) return 'item';
 
-  if (bracketed && lines.every((line) => notification.test(line))) {
-    return 'system';
-  }
-
-  // Recognize Overgeared system messages without
-  // treating ordinary bracketed narration as UI.
-  const systemPatterns = [
-    /\b(?:quest|mission|achievement|event map)\b/i,
-    /\b(?:stats|stat points|stamina|passive|skill)\b/i,
-    /\b(?:class change|level up|experience points)\b/i,
-    /\b(?:has|have|was|were|is|are)\s+(?:failed|completed|restored|destroyed|reduced|increased|lost|acquired|obtained)\b/i,
-    /\b(?:you have|you gained|you received|you acquired)\b/i,
-    /\b(?:war is considered to be lost)\b/i,
-  ];
-
-  if (
-    bracketed &&
-    systemPatterns.some((pattern) => pattern.test(raw.slice(1, -1)))
-  ) {
-    return 'system';
-  }
+  // Structural fallback:
+  // any standalone bracketed paragraph is a system notification.
+  if (bracketed) return 'system';
 
   return null;
 }

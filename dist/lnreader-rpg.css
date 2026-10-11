@@ -65,6 +65,14 @@
     inset 0 2px 0 #48b9ff,
     inset 0 -2px 0 #48b9ff;
 }
+/* Recuo visual sem alterar a altura do parágrafo */
+[data-rpg-theme="classic"] .rpg-window[data-rpg-kind="system"] {
+  padding: 0 !important;
+  border: 0 !important;
+  box-sizing: border-box;
+
+  text-indent: 0.65em;
+}
 [data-rpg-theme="medieval"] {
   --rpg-bg: #2c211b;
   --rpg-fg: #f5eadb;

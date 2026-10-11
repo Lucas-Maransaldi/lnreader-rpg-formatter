@@ -29,7 +29,6 @@ describe('conservative system detection', () => {
   ])('%s → %s', (text, kind) => expect(detectWindow(text)).toBe(kind));
   it.each([
     'His strength had increased, but he was still tired.',
-    '[She closed the letter.]',
     'You have leveled up! he shouted.',
     'Strength: it was all he had left.',
     'A legendary sword lay on the table.',
@@ -76,5 +75,27 @@ describe('English monetary notation', () => {
     expect(results.map((m) => m.currency)).toEqual(['gold', 'silver', 'EUR']);
     for (const result of results)
       expect(text.slice(result.start, result.end)).toBe(result.text);
+  });
+});
+describe('structural system notifications', () => {
+  it.each([
+    '[You have leveled up!]',
+    '[The Undefeated King’s class change quest has failed!]',
+    '[All stats are restored to their normal values.]',
+    '[The appreciation of the Undefeated King’s old sheath has greatly reduced.]',
+    '[She closed the letter.]',
+  ])('recognizes standalone bracketed text: %s', (text) => {
+    expect(detectWindow(text)).toBe('system');
+  });
+
+  it.each([
+    'She closed the letter.',
+    'The appreciation of the old sheath has greatly reduced.',
+    '[Incomplete notification',
+    'Incomplete notification]',
+    '[]',
+    '',
+  ])('ignores non-notifications: %s', (text) => {
+    expect(detectWindow(text)).toBeNull();
   });
 });
