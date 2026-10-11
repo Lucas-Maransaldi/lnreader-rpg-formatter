@@ -736,7 +736,37 @@
 
   // src/detectors/quests.ts
   var questNotice = /^(?:quest (?:started|accepted|completed|failed|updated)|(?:you have )?(?:completed|accepted|failed) (?:the |a )?quest)\b[^\n]{0,160}$/i;
-  var questField = /^(?:quest(?: name| difficulty)?|rewards?|penalt(?:y|ies)|objectives?)\s*:\s*\S.{0,180}$/i;
+  var questField = /^(?:quest(?: name| difficulty| clear conditions?| clear rewards?| rewards?| objectives?| conditions?)?|difficulty|rewards?|penalt(?:y|ies)|objectives?)\s*:\s*\S.{0,300}$/i;
+  function isQuestField(text) {
+    return questField.test(text.trim());
+  }
+  function isQuestAnchor(text) {
+    return /^(?:difficulty|quest (?:clear conditions?|clear rewards?|rewards?|objectives?|conditions?))\s*:\s*\S/i.test(
+      text.trim()
+    );
+  }
+  function isQuestDescription(text) {
+    const raw = text.trim();
+    if (!raw || raw.length > 600) {
+      return false;
+    }
+    if (raw.startsWith("[") || raw.endsWith("]")) {
+      return false;
+    }
+    if (/^["'“‘]/.test(raw)) {
+      return false;
+    }
+    if (/^(?:\*{3,}|-{3,})$/.test(raw)) {
+      return false;
+    }
+    if (/^[\w\s-]{2,40}\s*:/.test(raw)) {
+      return false;
+    }
+    return true;
+  }
+  function isQuestNote(text) {
+    return /^\*\s+\S.{0,400}$/.test(text.trim());
+  }
   function detectQuest(lines) {
     return lines.length > 0 && lines.every((line) => questNotice.test(line) || questField.test(line));
   }
@@ -916,12 +946,67 @@
       }
     }
   }
+  function associateQuestBlocks(elements, kinds, texts, questContinuations, questStarts) {
+    var _a, _b, _c;
+    for (let index = 0; index < elements.length - 1; index++) {
+      const titleElement = elements[index];
+      const titleText = (_a = texts.get(titleElement)) == null ? void 0 : _a.trim();
+      if (!titleText || !isItemTitleCandidate(titleText)) continue;
+      if (kinds.get(titleElement) === "item") continue;
+      let previous = titleElement;
+      let anchorFound = false;
+      for (let offset = 1; offset <= 4 && index + offset < elements.length; offset++) {
+        const candidate = elements[index + offset];
+        const text = (_b = texts.get(candidate)) == null ? void 0 : _b.trim();
+        if (neighbor(previous, "nextSibling") !== candidate || !text) break;
+        if (text.startsWith("[") || kinds.get(candidate) === "item") break;
+        if (isQuestAnchor(text)) {
+          anchorFound = true;
+          break;
+        }
+        if (kinds.has(candidate) || !isQuestDescription(text)) break;
+        previous = candidate;
+      }
+      if (!anchorFound) continue;
+      kinds.set(titleElement, "quest");
+      questStarts.add(titleElement);
+      previous = titleElement;
+      let freeTextCount = 0;
+      let rewardSeen = false;
+      for (let nextIndex = index + 1; nextIndex < elements.length; nextIndex++) {
+        const current = elements[nextIndex];
+        const text = (_c = texts.get(current)) == null ? void 0 : _c.trim();
+        if (neighbor(previous, "nextSibling") !== current || !text) break;
+        if (text.startsWith("[") || kinds.get(current) === "item") break;
+        if (isQuestField(text)) {
+          kinds.set(current, "quest");
+          questContinuations.add(current);
+          previous = current;
+          rewardSeen = /^(?:quest (?:clear )?rewards?|rewards?)\s*:/i.test(text);
+          continue;
+        }
+        if (isQuestNote(text) && rewardSeen) {
+          kinds.set(current, "quest");
+          questContinuations.add(current);
+          break;
+        }
+        if (rewardSeen || kinds.has(current) || !isQuestDescription(text)) break;
+        if (freeTextCount >= 3) break;
+        kinds.set(current, "quest");
+        questContinuations.add(current);
+        freeTextCount++;
+        previous = current;
+      }
+    }
+  }
   function decorateWindows(root, profile2 = DEFAULT_RARITY_PROFILE) {
     var _a;
     const elements = Array.from(root.querySelectorAll(BLOCKS));
     const kinds = /* @__PURE__ */ new Map();
     const texts = /* @__PURE__ */ new Map();
     const itemContinuations = /* @__PURE__ */ new Set();
+    const questContinuations = /* @__PURE__ */ new Set();
+    const questStarts = /* @__PURE__ */ new Set();
     for (const element of elements) {
       if (element.closest(EXCLUDED) || element.querySelector(BLOCKS) || element.querySelector(EXCLUDED)) {
         continue;
@@ -942,11 +1027,15 @@
       }
     }
     associateItemBlocks(elements, kinds, texts, profile2, itemContinuations);
+    associateQuestBlocks(elements, kinds, texts, questContinuations, questStarts);
     const joins = (before, after) => {
       if (!before || !after || !kinds.has(before) || kinds.get(before) !== kinds.get(after)) {
         return false;
       }
       const kind = kinds.get(before);
+      if (kind === "quest") {
+        return !questStarts.has(after) && questContinuations.has(after);
+      }
       if (kind !== "item") {
         return true;
       }

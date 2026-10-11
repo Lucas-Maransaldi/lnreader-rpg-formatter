@@ -12,6 +12,13 @@ import {
 
 import { isItemDescription, isItemRequirement } from '../detectors/items';
 
+import {
+  isQuestAnchor,
+  isQuestDescription,
+  isQuestField,
+  isQuestNote,
+} from '../detectors/quests';
+
 import { clearRarity } from '../formatters/rarity-formatter';
 
 import { BLOCKS, EXCLUDED, neighbor } from './dom-structure';
@@ -252,6 +259,87 @@ function associateItemBlocks(
 }
 
 /**
+ * Associates a bracketed quest title with its structured fields and
+ * intervening description paragraphs. A nearby quest-specific field
+ * is required before any classification is changed.
+ */
+function associateQuestBlocks(
+  elements: HTMLElement[],
+  kinds: Map<Element, WindowKind>,
+  texts: Map<Element, string>,
+  questContinuations: Set<Element>,
+  questStarts: Set<Element>,
+): void {
+  for (let index = 0; index < elements.length - 1; index++) {
+    const titleElement = elements[index];
+    const titleText = texts.get(titleElement)?.trim();
+
+    if (!titleText || !isItemTitleCandidate(titleText)) continue;
+    // Item blocks have priority when a title is followed by a rating.
+    if (kinds.get(titleElement) === 'item') continue;
+
+    let previous: Element = titleElement;
+    let anchorFound = false;
+
+    // Look ahead at most four paragraphs for quest-specific evidence.
+    for (
+      let offset = 1;
+      offset <= 4 && index + offset < elements.length;
+      offset++
+    ) {
+      const candidate = elements[index + offset];
+      const text = texts.get(candidate)?.trim();
+      if (neighbor(previous, 'nextSibling') !== candidate || !text) break;
+      if (text.startsWith('[') || kinds.get(candidate) === 'item') break;
+      if (isQuestAnchor(text)) {
+        anchorFound = true;
+        break;
+      }
+      if (kinds.has(candidate) || !isQuestDescription(text)) break;
+      previous = candidate;
+    }
+
+    if (!anchorFound) continue;
+
+    kinds.set(titleElement, 'quest');
+    questStarts.add(titleElement);
+    previous = titleElement;
+    let freeTextCount = 0;
+    let rewardSeen = false;
+
+    for (let nextIndex = index + 1; nextIndex < elements.length; nextIndex++) {
+      const current = elements[nextIndex];
+      const text = texts.get(current)?.trim();
+      if (neighbor(previous, 'nextSibling') !== current || !text) break;
+      if (text.startsWith('[') || kinds.get(current) === 'item') break;
+
+      if (isQuestField(text)) {
+        kinds.set(current, 'quest');
+        questContinuations.add(current);
+        previous = current;
+        rewardSeen = /^(?:quest (?:clear )?rewards?|rewards?)\s*:/i.test(text);
+        continue;
+      }
+
+      if (isQuestNote(text) && rewardSeen) {
+        kinds.set(current, 'quest');
+        questContinuations.add(current);
+        break;
+      }
+
+      // After the reward, prose is treated as narrative, not quest text.
+      if (rewardSeen || kinds.has(current) || !isQuestDescription(text)) break;
+      if (freeTextCount >= 3) break;
+
+      kinds.set(current, 'quest');
+      questContinuations.add(current);
+      freeTextCount++;
+      previous = current;
+    }
+  }
+}
+
+/**
  * Classifies RPG windows and associates related paragraphs.
  *
  * Processing phases:
@@ -271,6 +359,8 @@ export function decorateWindows(
   const texts = new Map<Element, string>();
 
   const itemContinuations = new Set<Element>();
+  const questContinuations = new Set<Element>();
+  const questStarts = new Set<Element>();
 
   // =========================================
   // PHASE 1 — CLASSIFICATION
@@ -316,6 +406,7 @@ export function decorateWindows(
   // =========================================
 
   associateItemBlocks(elements, kinds, texts, profile, itemContinuations);
+  associateQuestBlocks(elements, kinds, texts, questContinuations, questStarts);
 
   // =========================================
   // PHASE 3 — GROUP BOUNDARIES
@@ -332,6 +423,11 @@ export function decorateWindows(
     }
 
     const kind = kinds.get(before);
+
+    // Only paragraphs associated with the same quest form one window.
+    if (kind === 'quest') {
+      return !questStarts.has(after) && questContinuations.has(after);
+    }
 
     // Consecutive SYSTEM notifications share a window.
     if (kind !== 'item') {
