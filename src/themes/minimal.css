@@ -1,0 +1,17 @@
+[data-rpg-theme="minimal"] {
+  --rpg-bg: var(--readerSettings-theme, #f7f7f5);
+  --rpg-fg: var(--readerSettings-textColor, #242830);
+  --rpg-border: #858b94;
+  --rpg-accent: #275b85;
+  --rpg-gold: #795000;
+  --rpg-silver: #4c5665;
+  --rpg-copper: #8a4326;
+}
+[data-rpg-theme="minimal"][data-rpg-tone="dark"] {
+  --rpg-bg: var(--readerSettings-theme, #1c2026);
+  --rpg-fg: var(--readerSettings-textColor, #f2f3f5);
+  --rpg-accent: #a6cfff;
+  --rpg-gold: #f5d477;
+  --rpg-silver: #d7e0ee;
+  --rpg-copper: #edb391;
+}

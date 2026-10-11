@@ -1,0 +1,33 @@
+/* Semantic colors, independent of rarity order and detector rules. */
+[data-rpg-theme] {
+  --rpg-rarity-common: #9CA3AF;
+  --rpg-rarity-uncommon: #22C55E;
+  --rpg-rarity-rare: #3B82F6;
+  --rpg-rarity-epic: #A855F7;
+  --rpg-rarity-unique: #F97316;
+  --rpg-rarity-legendary: #FACC15;
+  --rpg-rarity-mythic: #EF4444;
+  --rpg-rarity-text-background: #0b1018;
+}
+[data-rpg-theme] .rpg-window[data-rpg-item-rarity] {
+  --rpg-border: var(--rpg-item-rarity-color);
+}
+[data-rpg-theme] .rpg-rarity {
+  color: var(--rpg-rarity-color);
+  /* A quiet contrasting underlay preserves the requested hues on light themes too.
+     No padding, font-size, animations or glows that would change text geometry. */
+  background-color: var(--rpg-rarity-text-background);
+  border-radius: 2px;
+}
+[data-rpg-theme="medieval"] { --rpg-rarity-text-background: #160e09; }
+[data-rpg-theme="minimal"] { --rpg-rarity-text-background: #10151e; }
+[data-rpg-theme="minimal"][data-rpg-tone="light"] {
+  --rpg-rarity-common: #4B5563;
+  --rpg-rarity-uncommon: #15803D;
+  --rpg-rarity-rare: #1D4ED8;
+  --rpg-rarity-epic: #7E22CE;
+  --rpg-rarity-unique: #C2410C;
+  --rpg-rarity-legendary: #856000;
+  --rpg-rarity-mythic: #B91C1C;
+  --rpg-rarity-text-background: transparent;
+}

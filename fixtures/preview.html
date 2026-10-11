@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>LNReader RPG Formatter — preview</title>
+  <style>
+    :root { --readerSettings-theme: #10151e; --readerSettings-textColor: #dce2eb; color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--readerSettings-theme); color: var(--readerSettings-textColor); font: 18px/1.8 Georgia,serif; }
+    header,main,footer { max-width: 720px; margin: auto; padding: 24px; }
+    header { border-bottom: 1px solid #344052; font-family: system-ui,sans-serif; }
+    h1 { font-size: 24px; line-height: 1.3; }
+    .eyebrow { font: 12px/1.5 system-ui,sans-serif; letter-spacing: .12em; color: #aab8cb; }
+    nav { display: flex; flex-wrap: wrap; gap: 8px; }
+    button { border: 1px solid #64758c; border-radius: 7px; padding: 10px 14px; color: inherit; background: transparent; font: 14px system-ui,sans-serif; cursor: pointer; }
+    button[aria-pressed="true"] { background: #c7ddfa; color: #172334; }
+    footer { font: 13px/1.6 system-ui,sans-serif; opacity: .7; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">LNREADER RPG FORMATTER / 0.2.0</div>
+    <h1>The forge at dawn</h1>
+    <p>Original demonstration chapter. Tap an underlined real-world currency.</p>
+    <nav aria-label="Visual theme">
+      <button data-theme="classic" aria-pressed="true">Classic RPG</button>
+      <button data-theme="medieval" aria-pressed="false">Medieval Fantasy</button>
+      <button data-theme="minimal" aria-pressed="false">Minimal</button>
+      <button id="light" aria-pressed="false">Light background</button>
+    </nav>
+  </header>
+  <main id="LNReader-chapter">
+    <p>The smith opened the workshop before sunrise. A new message waited above the cooling anvil.</p>
+    <p>[You have leveled up!]</p>
+    <p>[Your strength has increased by 5.]</p>
+    <p>The merchant offered 15,000 gold, 500 silver coins and 100 copper for the blade. Nobody moved.</p>
+    <p>Strength: 125<br>Agility: 80<br>HP: 2,400 / 2,400<br>MP: 900 / 900<br>Level: 42</p>
+    <p>Item: Dawnforged Blade<br>Type: Weapon<br>Rarity: Legendary<br>Attack: 350<br>Item Effects: Restores stamina at dawn.<br>Item Requirements: Level 40</p>
+    <p>[Epic Item]</p>
+    <p>Item Name: Shadow Dagger<br>Grade: Epic<br>Attack Power: 450<br>Durability: 300/300<br>Price: 500 gold</p>
+    <p>The smith laid a legendary sword beside a rare shield. The legendary warrior waited outside.</p>
+    <p>Skill Acquired: Ember Guard<br>Passive Skill: Heat resistance<br>Cooldown: 30 seconds<br>Mana Cost: 25 MP</p>
+    <p>[Quest Started: The Silent Furnace]</p>
+    <p>Objectives: Repair the northern forge.</p>
+    <p>Rewards: 2.5 million gold</p>
+    <p>Back in the real world, the bill was ₩1,500,000. Another invoice listed €2,000, while the old receipt showed $1,500.</p>
+    <p>A friend had saved <em>2 million</em> euros. The smith folded the letter and returned to work.</p>
+    <p>[The letter was unfinished.]</p>
+  </main>
+  <footer>Fictional demonstration text, not an excerpt from Overgeared. No exchange rates are preconfigured. Works with local files and no network.</footer>
+  <script src="../dist/lnreader-rpg.js"></script>
+  <script>
+    document.querySelectorAll('[data-theme]').forEach(function (button) {
+      button.onclick = function () {
+        window.LNReaderRPG.configure({ theme: button.dataset.theme });
+        document.querySelectorAll('[data-theme]').forEach(function (b) { b.setAttribute('aria-pressed', String(b === button)); });
+      };
+    });
+    document.getElementById('light').onclick = function () {
+      var light = this.getAttribute('aria-pressed') !== 'true';
+      this.setAttribute('aria-pressed', String(light));
+      document.documentElement.style.setProperty('--readerSettings-theme', light ? '#f7f7f5' : '#10151e');
+      document.documentElement.style.setProperty('--readerSettings-textColor', light ? '#242830' : '#dce2eb');
+      window.LNReaderRPG.refresh();
+    };
+  </script>
+</body>
+</html>
