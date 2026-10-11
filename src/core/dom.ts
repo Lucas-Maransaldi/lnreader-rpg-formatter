@@ -23,10 +23,13 @@ export function blockText(element: Element): string {
  * Keep the original content so clearFormatting() can restore it.
  */
 function hideBrackets(element: HTMLElement): void {
-  if (element.hasAttribute('data-rpg-original-text')) return;
+  if (element.hasAttribute('data-rpg-brackets-hidden')) {
+    return;
+  }
 
-  // Preserve inline markup instead of overwriting it.
-  if (element.children.length > 0) return;
+  if (element.children.length > 0) {
+    return;
+  }
 
   const original = element.textContent || '';
   const trimmed = original.trim();
@@ -35,17 +38,46 @@ function hideBrackets(element: HTMLElement): void {
     return;
   }
 
-  element.dataset.rpgOriginalText = original;
-  element.textContent = trimmed.slice(1, -1).trim();
-}
+  const start = original.indexOf('[');
+  const end = original.lastIndexOf(']');
 
-function restoreBrackets(element: HTMLElement): void {
-  if (!element.hasAttribute('data-rpg-original-text')) {
+  if (start < 0 || end <= start) {
     return;
   }
 
-  element.textContent = element.dataset.rpgOriginalText || '';
-  element.removeAttribute('data-rpg-original-text');
+  const before = original.slice(0, start);
+  const content = original.slice(start + 1, end);
+  const after = original.slice(end + 1);
+
+  const opening = document.createElement('span');
+  opening.className = 'rpg-bracket';
+  opening.textContent = '[';
+
+  const closing = document.createElement('span');
+  closing.className = 'rpg-bracket';
+  closing.textContent = ']';
+
+  element.replaceChildren(
+    document.createTextNode(before),
+    opening,
+    document.createTextNode(content),
+    closing,
+    document.createTextNode(after),
+  );
+
+  element.dataset.rpgBracketsHidden = 'true';
+}
+
+function restoreBrackets(element: HTMLElement): void {
+  if (!element.hasAttribute('data-rpg-brackets-hidden')) {
+    return;
+  }
+
+  const text = element.textContent || '';
+
+  element.replaceChildren(document.createTextNode(text));
+
+  element.removeAttribute('data-rpg-brackets-hidden');
 }
 
 export function decorateWindows(

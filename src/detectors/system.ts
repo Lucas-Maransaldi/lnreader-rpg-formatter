@@ -91,8 +91,23 @@ export function detectWindow(
     return 'system';
   }
 
-  // Fallback for standalone bracketed Overgeared notifications.
-  if (bracketed) return 'system';
+  // Recognize Overgeared system messages without
+  // treating ordinary bracketed narration as UI.
+  const systemPatterns = [
+    /\b(?:quest|mission|achievement|event map)\b/i,
+    /\b(?:stats|stat points|stamina|passive|skill)\b/i,
+    /\b(?:class change|level up|experience points)\b/i,
+    /\b(?:has|have|was|were|is|are)\s+(?:failed|completed|restored|destroyed|reduced|increased|lost|acquired|obtained)\b/i,
+    /\b(?:you have|you gained|you received|you acquired)\b/i,
+    /\b(?:war is considered to be lost)\b/i,
+  ];
+
+  if (
+    bracketed &&
+    systemPatterns.some((pattern) => pattern.test(raw.slice(1, -1)))
+  ) {
+    return 'system';
+  }
 
   return null;
 }
