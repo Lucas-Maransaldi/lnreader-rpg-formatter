@@ -10,6 +10,11 @@ import {
   rarityHeader,
 } from '../detectors/item-rarity';
 
+import {
+  isItemDescription,
+  isItemRequirement,
+  isUnlabeledItemName,
+} from '../detectors/items';
 import { clearRarity } from '../formatters/rarity-formatter';
 import { BLOCKS, EXCLUDED, neighbor } from './dom-structure';
 import { readText } from './text-ranges';
@@ -79,7 +84,80 @@ function restoreBrackets(element: HTMLElement): void {
 
   element.removeAttribute('data-rpg-brackets-hidden');
 }
+/**
+ * Extends an identified item through its descriptive
+ * paragraphs and explicit requirement fields.
+ *
+ * Does not modify the DOM.
+ */
+function extendItemDescriptions(
+  elements: HTMLElement[],
+  kinds: Map<Element, WindowKind>,
+  texts: Map<Element, string>,
+  profile: RarityProfile,
+): void {
+  for (let index = 0; index < elements.length - 1; index++) {
+    const element = elements[index];
 
+    if (kinds.get(element) !== 'item') continue;
+
+    const name = texts.get(element);
+
+    if (!name || !isUnlabeledItemName(name)) continue;
+
+    const ratingElement = elements[index + 1];
+
+    // The rating must be the actual next DOM sibling.
+    if (neighbor(element, 'nextSibling') !== ratingElement) {
+      continue;
+    }
+
+    const ratingText = texts.get(ratingElement);
+
+    if (!ratingText) continue;
+
+    const ratingLines = itemLines(ratingText);
+
+    if (
+      ratingLines.length !== 1 ||
+      !rarityField(ratingLines[0].text, profile)
+    ) {
+      continue;
+    }
+
+    // We have an item name followed by an explicit rating.
+    let previous: Element = ratingElement;
+    let descriptions = 0;
+
+    for (let nextIndex = index + 2; nextIndex < elements.length; nextIndex++) {
+      const next = elements[nextIndex];
+
+      if (neighbor(previous, 'nextSibling') !== next) break;
+
+      // Never overwrite another recognized window.
+      if (kinds.has(next)) break;
+
+      const text = texts.get(next);
+
+      if (!text) break;
+
+      if (isItemRequirement(text)) {
+        kinds.set(next, 'item');
+        break;
+      }
+
+      if (!isItemDescription(text)) break;
+
+      // Limit unmarked descriptive paragraphs.
+      if (descriptions >= 3) break;
+
+      kinds.set(next, 'item');
+
+      descriptions++;
+      previous = next;
+    }
+  }
+}
 export function decorateWindows(
   root: HTMLElement,
   profile: RarityProfile = DEFAULT_RARITY_PROFILE,
@@ -114,14 +192,31 @@ export function decorateWindows(
       continue;
     }
 
-    const kind = detectWindow(
+    let kind = detectWindow(
       text,
       previous ? kinds.get(previous) || null : null,
       profile,
     );
 
+    // An unlabeled item name followed by a rarity field
+    // belongs to the item, not to the system notification group.
+    const next = neighbor(element, 'nextSibling');
+
+    if (next && isUnlabeledItemName(text)) {
+      const nextText =
+        next.getAttribute('data-rpg-original-text') ?? blockText(next);
+
+      const nextLines = itemLines(nextText);
+
+      if (nextLines.length === 1 && rarityField(nextLines[0].text, profile)) {
+        kind = 'item';
+      }
+    }
+
     if (kind) kinds.set(element, kind);
   }
+
+  extendItemDescriptions(elements, kinds, texts, profile);
 
   const joins = (before: Element | null, after: Element | null): boolean => {
     if (
@@ -138,8 +233,26 @@ export function decorateWindows(
     const previous = itemLines(texts.get(before)!);
     const next = itemLines(texts.get(after)!);
 
+    // Free-text descriptions and requirement fields that were
+    // explicitly classified as item continuations stay grouped.
+    if (
+      isItemDescription(texts.get(after)!) ||
+      isItemRequirement(texts.get(after)!)
+    ) {
+      return true;
+    }
+
     if (next.some((line) => rarityHeader(line.text, profile))) {
       return false;
+    }
+
+    // Unlabeled item name followed by its explicit rarity.
+    if (
+      isUnlabeledItemName(texts.get(before)!) &&
+      next.length === 1 &&
+      rarityField(next[0].text, profile)
+    ) {
+      return true;
     }
 
     if (next.some((line) => itemNameLine(line.text))) {
